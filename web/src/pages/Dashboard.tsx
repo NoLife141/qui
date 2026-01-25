@@ -40,6 +40,7 @@ import { TrackerIconImage } from "@/components/ui/tracker-icon"
 import { useInstancePreferences } from "@/hooks/useInstancePreferences"
 import { useInstances } from "@/hooks/useInstances"
 import { useQBittorrentAppInfo } from "@/hooks/useQBittorrentAppInfo"
+import { useSpeedTitle } from "@/hooks/useSpeedTitle"
 import { api } from "@/lib/api"
 import { copyTextToClipboard, formatBytes, getRatioColor } from "@/lib/utils"
 import type { InstanceResponse, ServerState, TorrentCounts, TorrentResponse, TorrentStats } from "@/types"
@@ -150,7 +151,7 @@ function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceSt
       }),
       enabled: true,
       refetchInterval: 5000, // Match TorrentTable polling
-      refetchIntervalInBackground: true,
+      refetchIntervalInBackground: false,
       staleTime: 2000,
       gcTime: 300000, // Match TorrentTable cache time
       placeholderData: (previousData: TorrentResponse | undefined) => previousData,
@@ -624,9 +625,10 @@ function InstanceCard({
   )
 }
 
-function MobileGlobalStatsCard({ statsData }: { statsData: DashboardInstanceStats[] }) {
+type GlobalStats = ReturnType<typeof useGlobalStats>
+
+function MobileGlobalStatsCard({ globalStats }: { globalStats: GlobalStats }) {
   const [speedUnit] = useSpeedUnits()
-  const globalStats = useGlobalStats(statsData)
 
   return (
     <Card className="sm:hidden">
@@ -680,9 +682,8 @@ function MobileGlobalStatsCard({ statsData }: { statsData: DashboardInstanceStat
   )
 }
 
-function GlobalStatsCards({ statsData }: { statsData: DashboardInstanceStats[] }) {
+function GlobalStatsCards({ globalStats }: { globalStats: GlobalStats }) {
   const [speedUnit] = useSpeedUnits()
-  const globalStats = useGlobalStats(statsData)
 
   return (
     <>
@@ -2363,7 +2364,6 @@ function QuickActionsDropdown({ statsData }: { statsData: DashboardInstanceStats
 }
 
 export function Dashboard() {
-  const defaultTitleRef = useRef<string | null>(null)
   const { instances, isLoading } = useInstances()
   const allInstances = instances || []
   const activeInstances = allInstances.filter(instance => instance.isActive)
@@ -2381,30 +2381,14 @@ export function Dashboard() {
   const statsData = useAllInstanceStats(activeInstances)
   const globalStats = useGlobalStats(statsData)
 
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return
-    }
-
-    if (defaultTitleRef.current === null) {
-      defaultTitleRef.current = document.title
-    }
-
-    if (!hasActiveInstances) {
-      document.title = defaultTitleRef.current ?? ""
-      return
-    }
-
-    const downloadSpeed = globalStats.totalDownload ?? 0
-    const uploadSpeed = globalStats.totalUpload ?? 0
-    const speedTitle = `D: ${formatSpeedWithUnit(downloadSpeed, speedUnit)} U: ${formatSpeedWithUnit(uploadSpeed, speedUnit)}`
-
-    document.title = `${speedTitle} | Dashboard`
-
-    return () => {
-      document.title = defaultTitleRef.current ?? ""
-    }
-  }, [globalStats.totalDownload, globalStats.totalUpload, hasActiveInstances, speedUnit])
+  useSpeedTitle({
+    downloadSpeed: globalStats.totalDownload ?? 0,
+    uploadSpeed: globalStats.totalUpload ?? 0,
+    speedUnit,
+    suffix: "Dashboard",
+    baseTitle: "Dashboard",
+    enabled: hasActiveInstances,
+  })
 
   // Handler for TrackerBreakdownCard to update settings
   const handleTrackerSettingsChange = (input: { trackerBreakdownSortColumn?: string; trackerBreakdownSortDirection?: string; trackerBreakdownItemsPerPage?: number }) => {
@@ -2499,10 +2483,10 @@ export function Dashboard() {
                     return (
                       <div key={sectionId} className="space-y-4">
                         {/* Mobile: Single combined card */}
-                        <MobileGlobalStatsCard statsData={statsData} />
+                        <MobileGlobalStatsCard globalStats={globalStats} />
                         {/* Tablet/Desktop: Separate cards */}
                         <div className="hidden sm:grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                          <GlobalStatsCards statsData={statsData} />
+                          <GlobalStatsCards globalStats={globalStats} />
                         </div>
                       </div>
                     )
