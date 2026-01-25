@@ -52,7 +52,9 @@ export function useSpeedTitle({
       return
     }
 
-    const speedTitle = `D: ${formatSpeedWithUnit(downloadSpeed, speedUnit)} U: ${formatSpeedWithUnit(uploadSpeed, speedUnit)}`
+    const safeDownloadSpeed = downloadSpeed ?? 0
+    const safeUploadSpeed = uploadSpeed ?? 0
+    const speedTitle = `D: ${formatSpeedWithUnit(safeDownloadSpeed, speedUnit)} U: ${formatSpeedWithUnit(safeUploadSpeed, speedUnit)}`
     const suffixTitle = suffix ? ` | ${suffix}` : ""
     const nextTitle = `${speedTitle}${suffixTitle}`
 
