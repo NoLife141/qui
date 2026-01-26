@@ -45,8 +45,10 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { useDateTimeFormatters } from "@/hooks/useDateTimeFormatters"
 import { useInstances } from "@/hooks/useInstances"
+import { usePersistedBackgroundRefresh } from "@/hooks/usePersistedBackgroundRefresh"
 import { api } from "@/lib/api"
 import { withBasePath } from "@/lib/base-url"
 import { copyTextToClipboard, formatBytes } from "@/lib/utils"
@@ -712,6 +714,7 @@ interface SettingsProps {
 
 export function Settings({ search, onSearchChange }: SettingsProps) {
   const activeTab: SettingsTab = search.tab ?? "instances"
+  const [backgroundRefreshEnabled, setBackgroundRefreshEnabled] = usePersistedBackgroundRefresh()
 
   const handleTabChange = (tab: SettingsTab) => {
     onSearchChange({ tab })
@@ -926,6 +929,29 @@ export function Settings({ search, onSearchChange }: SettingsProps) {
                 </CardHeader>
                 <CardContent>
                   <InstancesManager search={search} onSearchChange={onSearchChange} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Application Preferences</CardTitle>
+                  <CardDescription>
+                    Control how qui refreshes data across browser tabs
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="background-refresh-toggle">Refresh data in background tabs</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Keeps polling active when this tab is in the background. Disable to reduce network usage.
+                      </p>
+                    </div>
+                    <Switch
+                      id="background-refresh-toggle"
+                      checked={backgroundRefreshEnabled}
+                      onCheckedChange={(value) => setBackgroundRefreshEnabled(!!value)}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </div>

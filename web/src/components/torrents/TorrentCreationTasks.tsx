@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table"
+import { usePersistedBackgroundRefresh } from "@/hooks/usePersistedBackgroundRefresh"
 import { api } from "@/lib/api"
 import { useDateTimeFormatters } from "@/hooks/useDateTimeFormatters"
 import { getTorrentTaskPollInterval } from "@/lib/torrent-task-polling"
@@ -43,6 +44,7 @@ const STATUS_ICONS: Record<TorrentCreationStatus, React.ReactNode> = {
 export function TorrentCreationTasks({ instanceId }: TorrentCreationTasksProps) {
   const queryClient = useQueryClient()
   const { formatDate } = useDateTimeFormatters()
+  const [backgroundRefreshEnabled] = usePersistedBackgroundRefresh()
 
   // Keep table responsive while tasks run and ease off polling once queue clears
   const { data: tasks, isLoading } = useQuery({
@@ -52,7 +54,7 @@ export function TorrentCreationTasks({ instanceId }: TorrentCreationTasksProps) 
       getTorrentTaskPollInterval(query.state.data as TorrentCreationTask[] | undefined, {
         activeInterval: 2000,
       }),
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: backgroundRefreshEnabled,
   })
 
   const downloadMutation = useMutation({

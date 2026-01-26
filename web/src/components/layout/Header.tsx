@@ -31,6 +31,7 @@ import { useCrossSeedInstanceState } from "@/hooks/useCrossSeedInstanceState"
 import { useDebounce } from "@/hooks/useDebounce"
 import { useInstances } from "@/hooks/useInstances"
 import { usePersistedCompactViewState } from "@/hooks/usePersistedCompactViewState"
+import { usePersistedBackgroundRefresh } from "@/hooks/usePersistedBackgroundRefresh"
 import { usePersistedFilterSidebarState } from "@/hooks/usePersistedFilterSidebarState"
 import { useTheme } from "@/hooks/useTheme"
 import { api } from "@/lib/api"
@@ -140,6 +141,7 @@ export function Header({
   )
   const { theme } = useTheme()
   const { viewMode } = usePersistedCompactViewState("normal")
+  const [backgroundRefreshEnabled] = usePersistedBackgroundRefresh()
 
   // Query active task count for badge (lightweight endpoint, only for instance routes)
   const { data: activeTaskCount = 0 } = useQuery({
@@ -147,7 +149,7 @@ export function Header({
     queryFn: () => selectedInstanceId !== null ? api.getActiveTaskCount(selectedInstanceId) : Promise.resolve(0),
     enabled: shouldShowInstanceControls && selectedInstanceId !== null,
     refetchInterval: 30000, // Poll every 30 seconds (lightweight check)
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: backgroundRefreshEnabled,
   })
 
   // Query for available updates

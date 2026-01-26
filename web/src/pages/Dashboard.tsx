@@ -39,6 +39,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { TrackerIconImage } from "@/components/ui/tracker-icon"
 import { useInstancePreferences } from "@/hooks/useInstancePreferences"
 import { useInstances } from "@/hooks/useInstances"
+import { usePersistedBackgroundRefresh } from "@/hooks/usePersistedBackgroundRefresh"
 import { useQBittorrentAppInfo } from "@/hooks/useQBittorrentAppInfo"
 import { api } from "@/lib/api"
 import { copyTextToClipboard, formatBytes, getRatioColor } from "@/lib/utils"
@@ -138,6 +139,7 @@ function useGlobalStats(statsData: DashboardInstanceStats[]) {
 
 // Optimized hook to get all instance stats using shared TorrentResponse cache
 function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceStats[] {
+  const [backgroundRefreshEnabled] = usePersistedBackgroundRefresh()
   const dashboardQueries = useQueries({
     queries: instances.map(instance => ({
       // Use same query key pattern as useTorrentsList for first page with no filters
@@ -150,7 +152,7 @@ function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceSt
       }),
       enabled: true,
       refetchInterval: 5000, // Match TorrentTable polling
-      refetchIntervalInBackground: true,
+      refetchIntervalInBackground: backgroundRefreshEnabled,
       staleTime: 2000,
       gcTime: 300000, // Match TorrentTable cache time
       placeholderData: (previousData: TorrentResponse | undefined) => previousData,

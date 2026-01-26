@@ -31,6 +31,7 @@ import { Switch } from "@/components/ui/switch"
 import { useCrossSeedWarning } from "@/hooks/useCrossSeedWarning"
 import { useDebounce } from "@/hooks/useDebounce"
 import { useInstances } from "@/hooks/useInstances"
+import { usePersistedBackgroundRefresh } from "@/hooks/usePersistedBackgroundRefresh"
 import { TORRENT_ACTIONS, useTorrentActions, type TorrentAction } from "@/hooks/useTorrentActions"
 import { useTorrentsList } from "@/hooks/useTorrentsList"
 import { useTrackerCustomizations } from "@/hooks/useTrackerCustomizations"
@@ -1121,13 +1122,14 @@ export function TorrentCardsMobile({
 
   const effectiveSearch = searchFromRoute || immediateSearch || debouncedSearch
   const navigate = useNavigate()
+  const [backgroundRefreshEnabled] = usePersistedBackgroundRefresh()
 
   // Query active task count for badge (lightweight endpoint)
   const { data: activeTaskCount = 0 } = useQuery({
     queryKey: ["active-task-count", instanceId],
     queryFn: () => api.getActiveTaskCount(instanceId),
     refetchInterval: 30000, // Poll every 30 seconds (lightweight check)
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: backgroundRefreshEnabled,
   })
 
   useEffect(() => {

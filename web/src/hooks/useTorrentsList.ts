@@ -4,6 +4,7 @@
  */
 
 import { useInstanceCapabilities } from "@/hooks/useInstanceCapabilities"
+import { usePersistedBackgroundRefresh } from "@/hooks/usePersistedBackgroundRefresh"
 import { api } from "@/lib/api"
 import type { Torrent, TorrentFilters, TorrentResponse } from "@/types"
 import { useQuery } from "@tanstack/react-query"
@@ -32,6 +33,7 @@ export function useTorrentsList(
   const [lastRequestTime, setLastRequestTime] = useState(0)
   const [lastKnownTotal, setLastKnownTotal] = useState(0)
   const [lastProcessedPage, setLastProcessedPage] = useState(-1)
+  const [backgroundRefreshEnabled] = usePersistedBackgroundRefresh()
   const pageSize = 300 // Load 300 at a time (backend default)
 
   // Reset state when instanceId, filters, search, or sort changes
@@ -84,7 +86,7 @@ export function useTorrentsList(
     // Only poll the first page to get fresh data - don't poll pagination pages
     // Reduce polling frequency for cross-instance calls since they're more expensive
     refetchInterval: currentPage === 0 ? (isCrossSeedFiltering ? 10000 : 3000) : false,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: backgroundRefreshEnabled,
     enabled,
   })
 
