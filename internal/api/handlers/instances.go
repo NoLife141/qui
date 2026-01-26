@@ -79,6 +79,39 @@ func (h *InstancesHandler) GetInstanceCapabilities(w http.ResponseWriter, r *htt
 	RespondJSON(w, http.StatusOK, capabilities)
 }
 
+// GetServerStateSpeeds returns lightweight server state speeds for an instance.
+func (h *InstancesHandler) GetServerStateSpeeds(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	client, err := h.clientPool.GetClientOffline(ctx, instanceID)
+	if err != nil {
+		client, err = h.clientPool.GetClientWithTimeout(ctx, instanceID, 10*time.Second)
+		if err != nil {
+			if respondIfInstanceDisabled(w, err, instanceID, "instances:getServerStateSpeeds") {
+				return
+			}
+			log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get client for server state speeds")
+			RespondError(w, http.StatusServiceUnavailable, "Failed to load server state speeds")
+			return
+		}
+	}
+
+	response := ServerStateSpeedsResponse{}
+	if state := client.GetCachedServerState(); state != nil {
+		response.DlInfoSpeed = state.DlInfoSpeed
+		response.UpInfoSpeed = state.UpInfoSpeed
+	}
+
+	RespondJSON(w, http.StatusOK, response)
+}
+
 // GetReannounceActivity returns recent reannounce events for an instance.
 func (h *InstancesHandler) GetReannounceActivity(w http.ResponseWriter, r *http.Request) {
 	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
@@ -393,6 +426,12 @@ type InstanceResponse struct {
 	SortOrder                int                               `json:"sortOrder"`
 	IsActive                 bool                              `json:"isActive"`
 	ReannounceSettings       InstanceReannounceSettingsPayload `json:"reannounceSettings"`
+}
+
+// ServerStateSpeedsResponse represents lightweight server state speeds.
+type ServerStateSpeedsResponse struct {
+	DlInfoSpeed int64 `json:"dl_info_speed"`
+	UpInfoSpeed int64 `json:"up_info_speed"`
 }
 
 // InstanceReannounceSettingsPayload carries tracker monitoring config.

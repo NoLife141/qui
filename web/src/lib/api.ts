@@ -82,6 +82,7 @@ import type {
   RSSMatchingArticles,
   RSSRules,
   SearchHistoryResponse,
+  ServerStateSpeeds,
   SetRSSFeedURLRequest,
   SetRSSRuleRequest,
   SortedPeersResponse,
@@ -464,6 +465,10 @@ class ApiClient {
 
   async getInstanceCapabilities(id: number): Promise<InstanceCapabilities> {
     return this.request<InstanceCapabilities>(`/instances/${id}/capabilities`)
+  }
+
+  async getServerStateSpeeds(id: number): Promise<ServerStateSpeeds> {
+    return this.request<ServerStateSpeeds>(`/instances/${id}/server-state/speeds`)
   }
 
   async getInstanceReannounceActivity(
