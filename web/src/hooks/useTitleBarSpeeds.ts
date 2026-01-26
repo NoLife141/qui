@@ -56,7 +56,11 @@ export function useTitleBarSpeeds({
   })
 
   const shouldPollBackground = isHidden || !foregroundSpeeds
-  const backgroundSpeeds = backgroundSpeedsOverride ?? useServerStateSpeeds(instanceId, shouldPollBackground)
+  const backgroundSpeedsQuery = useServerStateSpeeds(
+    instanceId,
+    shouldPollBackground && !backgroundSpeedsOverride
+  )
+  const backgroundSpeeds = backgroundSpeedsOverride ?? backgroundSpeedsQuery
   const effectiveSpeeds = isHidden ? backgroundSpeeds : foregroundSpeeds
 
   useEffect(() => {
