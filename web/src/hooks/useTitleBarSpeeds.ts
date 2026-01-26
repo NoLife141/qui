@@ -13,6 +13,7 @@ interface UseTitleBarSpeedsOptions {
   instanceId?: number
   instanceName?: string
   foregroundSpeeds?: { dl: number; up: number }
+  backgroundSpeeds?: { dl: number; up: number }
 }
 
 export function useServerStateSpeeds(instanceId?: number, enabled = true) {
@@ -42,6 +43,7 @@ export function useTitleBarSpeeds({
   instanceId,
   instanceName,
   foregroundSpeeds,
+  backgroundSpeeds: backgroundSpeedsOverride,
 }: UseTitleBarSpeedsOptions) {
   const [speedUnit] = useSpeedUnits()
   const defaultTitleRef = useRef<string | null>(null)
@@ -54,7 +56,7 @@ export function useTitleBarSpeeds({
   })
 
   const shouldPollBackground = isHidden || !foregroundSpeeds
-  const backgroundSpeeds = useServerStateSpeeds(instanceId, shouldPollBackground)
+  const backgroundSpeeds = backgroundSpeedsOverride ?? useServerStateSpeeds(instanceId, shouldPollBackground)
   const effectiveSpeeds = isHidden ? backgroundSpeeds : foregroundSpeeds
 
   useEffect(() => {
