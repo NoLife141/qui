@@ -15,8 +15,8 @@ interface UseTitleBarSpeedsOptions {
   foregroundSpeeds?: { dl: number; up: number }
 }
 
-export function useServerStateSpeeds(instanceId?: number) {
-  const isEnabled = typeof instanceId === "number"
+export function useServerStateSpeeds(instanceId?: number, enabled = true) {
+  const isEnabled = typeof instanceId === "number" && enabled
 
   const { data } = useQuery({
     queryKey: ["server-state-speeds", instanceId],
@@ -60,7 +60,8 @@ export function useTitleBarSpeeds({
     return document.hidden
   })
 
-  const backgroundSpeeds = useServerStateSpeeds(instanceId)
+  const shouldPollBackground = isHidden || !foregroundSpeeds
+  const backgroundSpeeds = useServerStateSpeeds(instanceId, shouldPollBackground)
   const effectiveSpeeds = isHidden ? backgroundSpeeds : foregroundSpeeds
 
   useEffect(() => {
