@@ -39,14 +39,16 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { TrackerIconImage } from "@/components/ui/tracker-icon"
 import { useInstancePreferences } from "@/hooks/useInstancePreferences"
 import { useInstances } from "@/hooks/useInstances"
+import { useInstancesSpeeds } from "@/hooks/useInstanceSpeeds"
 import { useQBittorrentAppInfo } from "@/hooks/useQBittorrentAppInfo"
+import { useSpeedTitle } from "@/hooks/useSpeedTitle"
 import { api } from "@/lib/api"
 import { copyTextToClipboard, formatBytes, getRatioColor } from "@/lib/utils"
 import type { InstanceResponse, ServerState, TorrentCounts, TorrentResponse, TorrentStats } from "@/types"
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Activity, AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Ban, BrickWallFire, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, ExternalLink, Eye, EyeOff, Globe, HardDrive, Info, Link2, Minus, Pencil, Plus, Rabbit, RefreshCcw, Trash2, Turtle, Upload, X, Zap } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import {
@@ -150,7 +152,7 @@ function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceSt
       }),
       enabled: true,
       refetchInterval: 5000, // Match TorrentTable polling
-      refetchIntervalInBackground: true,
+      refetchIntervalInBackground: false,
       staleTime: 2000,
       gcTime: 300000, // Match TorrentTable cache time
       placeholderData: (previousData: TorrentResponse | undefined) => previousData,
@@ -624,9 +626,10 @@ function InstanceCard({
   )
 }
 
-function MobileGlobalStatsCard({ statsData }: { statsData: DashboardInstanceStats[] }) {
+type GlobalStats = ReturnType<typeof useGlobalStats>
+
+function MobileGlobalStatsCard({ globalStats }: { globalStats: GlobalStats }) {
   const [speedUnit] = useSpeedUnits()
-  const globalStats = useGlobalStats(statsData)
 
   return (
     <Card className="sm:hidden">
@@ -680,9 +683,8 @@ function MobileGlobalStatsCard({ statsData }: { statsData: DashboardInstanceStat
   )
 }
 
-function GlobalStatsCards({ statsData }: { statsData: DashboardInstanceStats[] }) {
+function GlobalStatsCards({ globalStats }: { globalStats: GlobalStats }) {
   const [speedUnit] = useSpeedUnits()
-  const globalStats = useGlobalStats(statsData)
 
   return (
     <>
@@ -2363,12 +2365,12 @@ function QuickActionsDropdown({ statsData }: { statsData: DashboardInstanceStats
 }
 
 export function Dashboard() {
-  const defaultTitleRef = useRef<string | null>(null)
   const { instances, isLoading } = useInstances()
   const allInstances = instances || []
   const activeInstances = allInstances.filter(instance => instance.isActive)
   const hasInstances = allInstances.length > 0
   const hasActiveInstances = activeInstances.length > 0
+  const activeInstanceIds = useMemo(() => activeInstances.map(instance => instance.id), [activeInstances])
   const [isAdvancedMetricsOpen, setIsAdvancedMetricsOpen] = useState(false)
   const [speedUnit] = useSpeedUnits()
 
@@ -2380,31 +2382,34 @@ export function Dashboard() {
   // Use safe hook that always calls the same number of hooks
   const statsData = useAllInstanceStats(activeInstances)
   const globalStats = useGlobalStats(statsData)
+  const instanceSpeeds = useInstancesSpeeds(activeInstanceIds, hasActiveInstances)
 
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return
-    }
+  const streamingTotals = useMemo(() => {
+    let downloadTotal = 0
+    let uploadTotal = 0
+    let hasAny = false
 
-    if (defaultTitleRef.current === null) {
-      defaultTitleRef.current = document.title
-    }
+    activeInstanceIds.forEach((instanceId) => {
+      const speeds = instanceSpeeds[instanceId]
+      if (!speeds) {
+        return
+      }
+      hasAny = true
+      downloadTotal += speeds.dl_info_speed ?? 0
+      uploadTotal += speeds.up_info_speed ?? 0
+    })
 
-    if (!hasActiveInstances) {
-      document.title = defaultTitleRef.current ?? ""
-      return
-    }
+    return { downloadTotal, uploadTotal, hasAny }
+  }, [activeInstanceIds, instanceSpeeds])
 
-    const downloadSpeed = globalStats.totalDownload ?? 0
-    const uploadSpeed = globalStats.totalUpload ?? 0
-    const speedTitle = `D: ${formatSpeedWithUnit(downloadSpeed, speedUnit)} U: ${formatSpeedWithUnit(uploadSpeed, speedUnit)}`
-
-    document.title = `${speedTitle} | Dashboard`
-
-    return () => {
-      document.title = defaultTitleRef.current ?? ""
-    }
-  }, [globalStats.totalDownload, globalStats.totalUpload, hasActiveInstances, speedUnit])
+  useSpeedTitle({
+    downloadSpeed: streamingTotals.hasAny ? streamingTotals.downloadTotal : (globalStats.totalDownload ?? 0),
+    uploadSpeed: streamingTotals.hasAny ? streamingTotals.uploadTotal : (globalStats.totalUpload ?? 0),
+    speedUnit,
+    suffix: "Dashboard",
+    baseTitle: "Dashboard",
+    enabled: hasActiveInstances,
+  })
 
   // Handler for TrackerBreakdownCard to update settings
   const handleTrackerSettingsChange = (input: { trackerBreakdownSortColumn?: string; trackerBreakdownSortDirection?: string; trackerBreakdownItemsPerPage?: number }) => {
@@ -2499,10 +2504,10 @@ export function Dashboard() {
                     return (
                       <div key={sectionId} className="space-y-4">
                         {/* Mobile: Single combined card */}
-                        <MobileGlobalStatsCard statsData={statsData} />
+                        <MobileGlobalStatsCard globalStats={globalStats} />
                         {/* Tablet/Desktop: Separate cards */}
                         <div className="hidden sm:grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                          <GlobalStatsCards statsData={statsData} />
+                          <GlobalStatsCards globalStats={globalStats} />
                         </div>
                       </div>
                     )

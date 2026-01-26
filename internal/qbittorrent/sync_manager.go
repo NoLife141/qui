@@ -5651,6 +5651,27 @@ func (sm *SyncManager) GetFreeSpace(ctx context.Context, instanceID int) (int64,
 	return state.FreeSpaceOnDisk, nil
 }
 
+// GetCachedServerState returns the most recent server state cached from sync updates.
+func (sm *SyncManager) GetCachedServerState(ctx context.Context, instanceID int) (*qbt.ServerState, error) {
+	client, syncManager, err := sm.getClientAndSyncManager(ctx, instanceID)
+	if err != nil {
+		return nil, err
+	}
+
+	if cached := client.GetCachedServerState(); cached != nil {
+		return cached, nil
+	}
+
+	if syncManager != nil {
+		if data := syncManager.GetData(); data != nil && data.ServerState != (qbt.ServerState{}) {
+			stateCopy := data.ServerState
+			return &stateCopy, nil
+		}
+	}
+
+	return nil, nil
+}
+
 // RSS Methods - thin proxies to qBittorrent RSS API
 
 // GetRSSItems retrieves all RSS feeds and folders for an instance

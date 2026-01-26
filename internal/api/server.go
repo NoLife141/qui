@@ -303,6 +303,7 @@ func (s *Server) Handler() (*chi.Mux, error) {
 	trackerCustomizationHandler := handlers.NewTrackerCustomizationHandler(s.trackerCustomizationStore, s.syncManager.InvalidateTrackerDisplayNameCache)
 	rssHandler := handlers.NewRSSHandler(s.syncManager)
 	rssSSEHandler := handlers.NewRSSSSEHandler(s.syncManager)
+	speedsSSEHandler := handlers.NewSpeedsSSEHandler(s.syncManager)
 	dashboardSettingsHandler := handlers.NewDashboardSettingsHandler(s.dashboardSettingsStore)
 	logExclusionsHandler := handlers.NewLogExclusionsHandler(s.logExclusionsStore)
 	logsHandler := handlers.NewLogsHandler(s.config)
@@ -504,6 +505,9 @@ func (s *Server) Handler() (*chi.Mux, error) {
 						rssHandler.Routes(r)
 						r.Get("/events", rssSSEHandler.HandleSSE)
 					})
+
+					// Speeds streaming (SSE)
+					r.Get("/speeds/events", speedsSSEHandler.HandleSSE)
 
 					// Preferences
 					r.Get("/preferences", preferencesHandler.GetPreferences)
