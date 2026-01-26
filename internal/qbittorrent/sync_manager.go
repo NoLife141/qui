@@ -6,12 +6,14 @@ package qbittorrent
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"net"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strconv"
@@ -120,6 +122,18 @@ type TorrentResponse struct {
 	PartialResults         bool                       `json:"partialResults"`  // Whether some instances failed to respond
 }
 
+type TorrentDeltaResponse struct {
+	Rid        int64                  `json:"rid"`
+	FullUpdate bool                   `json:"fullUpdate"`
+	Torrents   map[string]TorrentView `json:"torrents,omitempty"`
+	Removed    []string               `json:"removed,omitempty"`
+}
+
+type torrentDeltaState struct {
+	rid      int64
+	torrents map[string]TorrentView
+}
+
 // TorrentStats represents aggregated torrent statistics
 type TorrentStats struct {
 	Total              int   `json:"total"`
@@ -204,6 +218,9 @@ type SyncManager struct {
 	trackerCustomizationStore TrackerCustomizationLister
 	// Cached tracker display name map (domain -> displayName), refreshed periodically
 	trackerDisplayNameCache *ttlcache.Cache[string, map[string]string]
+
+	// Per-session torrent delta cache for rid-based polling
+	torrentDeltaCache *ttlcache.Cache[string, *torrentDeltaState]
 }
 
 // ResumeWhenCompleteOptions configure resume monitoring behavior.
@@ -240,6 +257,7 @@ func NewSyncManager(clientPool *ClientPool, trackerCustomizationStore TrackerCus
 		trackerHealthRefresh:      60 * time.Second,
 		validatedTrackerMapping:   make(map[int]*ValidatedTrackerMapping),
 		trackerDisplayNameCache:   ttlcache.New(ttlcache.Options[string, map[string]string]{}.SetDefaultTTL(60 * time.Second)),
+		torrentDeltaCache:         ttlcache.New(ttlcache.Options[string, *torrentDeltaState]{}.SetDefaultTTL(5 * time.Minute)),
 	}
 
 	// Set up bidirectional reference for background task notifications
@@ -1229,6 +1247,115 @@ func (sm *SyncManager) GetTorrentsWithFilters(ctx context.Context, instanceID in
 		Msg("Fresh torrent data fetched and cached")
 
 	return response, nil
+}
+
+func (sm *SyncManager) GetTorrentDelta(
+	ctx context.Context,
+	instanceID int,
+	sessionID string,
+	rid int64,
+	limit int,
+	offset int,
+	sort string,
+	order string,
+	search string,
+	filters FilterOptions,
+) (*TorrentDeltaResponse, error) {
+	if sessionID == "" {
+		return nil, errors.New("session ID is required")
+	}
+
+	response, err := sm.GetTorrentsWithFilters(ctx, instanceID, limit, offset, sort, order, search, filters)
+	if err != nil {
+		return nil, err
+	}
+
+	current := make(map[string]TorrentView, len(response.Torrents))
+	for _, torrent := range response.Torrents {
+		current[torrent.Hash] = torrent
+	}
+
+	keyPayload := struct {
+		InstanceID int           `json:"instanceId"`
+		SessionID  string        `json:"sessionId"`
+		Limit      int           `json:"limit"`
+		Offset     int           `json:"offset"`
+		Sort       string        `json:"sort"`
+		Order      string        `json:"order"`
+		Search     string        `json:"search"`
+		Filters    FilterOptions `json:"filters"`
+	}{
+		InstanceID: instanceID,
+		SessionID:  sessionID,
+		Limit:      limit,
+		Offset:     offset,
+		Sort:       sort,
+		Order:      order,
+		Search:     search,
+		Filters:    filters,
+	}
+
+	keyBytes, err := json.Marshal(keyPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build delta cache key: %w", err)
+	}
+	cacheKey := string(keyBytes)
+
+	var (
+		prevState  *torrentDeltaState
+		stateFound bool
+	)
+	if sm.torrentDeltaCache != nil {
+		prevState, stateFound = sm.torrentDeltaCache.Get(cacheKey)
+	}
+
+	fullUpdate := !stateFound || rid == 0
+	if stateFound && rid != 0 && rid != prevState.rid {
+		fullUpdate = true
+	}
+
+	nextRid := int64(1)
+	if stateFound {
+		nextRid = prevState.rid + 1
+	}
+
+	var changed map[string]TorrentView
+	var removed []string
+
+	if fullUpdate {
+		changed = current
+	} else {
+		changed = make(map[string]TorrentView)
+		for hash, torrent := range current {
+			prev, ok := prevState.torrents[hash]
+			if !ok || !reflect.DeepEqual(prev, torrent) {
+				changed[hash] = torrent
+			}
+		}
+
+		if len(prevState.torrents) > 0 {
+			removed = make([]string, 0)
+			for hash := range prevState.torrents {
+				if _, ok := current[hash]; !ok {
+					removed = append(removed, hash)
+				}
+			}
+		}
+	}
+
+	if sm.torrentDeltaCache != nil {
+		sm.torrentDeltaCache.Set(cacheKey, &torrentDeltaState{
+			rid:      nextRid,
+			torrents: current,
+		}, ttlcache.DefaultTTL)
+	}
+
+	return &TorrentDeltaResponse{
+		Rid:        nextRid,
+		FullUpdate: fullUpdate,
+		Torrents:   changed,
+		Removed:    removed,
+	}, nil
 }
 
 // GetCachedInstanceTorrents returns a snapshot of torrents for a single instance using cached sync data.

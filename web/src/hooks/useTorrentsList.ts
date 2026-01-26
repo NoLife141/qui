@@ -5,7 +5,7 @@
 
 import { useInstanceCapabilities } from "@/hooks/useInstanceCapabilities"
 import { api } from "@/lib/api"
-import type { Torrent, TorrentFilters, TorrentResponse } from "@/types"
+import type { Torrent, TorrentDeltaResponse, TorrentFilters, TorrentResponse } from "@/types"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect, useMemo, useState } from "react"
 
@@ -32,6 +32,7 @@ export function useTorrentsList(
   const [lastRequestTime, setLastRequestTime] = useState(0)
   const [lastKnownTotal, setLastKnownTotal] = useState(0)
   const [lastProcessedPage, setLastProcessedPage] = useState(-1)
+  const [deltaRid, setDeltaRid] = useState(0)
   const pageSize = 300 // Load 300 at a time (backend default)
 
   // Reset state when instanceId, filters, search, or sort changes
@@ -45,6 +46,7 @@ export function useTorrentsList(
     setHasLoadedAll(false)
     setLastKnownTotal(0)
     setLastProcessedPage(-1)
+    setDeltaRid(0)
   }, [instanceId, filterKey, searchKey, sort, order])
 
   // Detect if this is cross-seed filtering based on expression content
@@ -53,7 +55,7 @@ export function useTorrentsList(
   }, [filters?.expr])
 
   // Query for torrents - backend handles stale-while-revalidate
-  const { data, isLoading, isFetching, isPlaceholderData } = useQuery<TorrentResponse>({
+  const { data, isLoading, isFetching, isPlaceholderData, refetch } = useQuery<TorrentResponse>({
     queryKey: ["torrents-list", instanceId, currentPage, filters, search, sort, order, isCrossSeedFiltering],
     queryFn: () => {
       if (isCrossSeedFiltering) {
@@ -83,10 +85,88 @@ export function useTorrentsList(
     placeholderData: currentPage > 0 ? ((previousData) => previousData) : undefined,
     // Only poll the first page to get fresh data - don't poll pagination pages
     // Reduce polling frequency for cross-instance calls since they're more expensive
-    refetchInterval: currentPage === 0 ? (isCrossSeedFiltering ? 10000 : 3000) : false,
+    refetchInterval: (query) => {
+      if (currentPage !== 0) {
+        return false
+      }
+      if (isCrossSeedFiltering) {
+        return 10000
+      }
+      const queryData = query.state.data as TorrentResponse | undefined
+      const shouldUseDelta = queryData?.total !== undefined && queryData.total <= pageSize && sort === "added_on" && order === "desc"
+      return shouldUseDelta ? false : 3000
+    },
     refetchIntervalInBackground: true,
     enabled,
   })
+
+  const canUseDeltaPolling = useMemo(() => {
+    if (!enabled || isCrossSeedFiltering) {
+      return false
+    }
+    if (currentPage !== 0) {
+      return false
+    }
+    if (data?.total === undefined || data.total > pageSize) {
+      return false
+    }
+    return sort === "added_on" && order === "desc"
+  }, [currentPage, data?.total, enabled, isCrossSeedFiltering, order, sort])
+
+  const { data: deltaData } = useQuery<TorrentDeltaResponse>({
+    queryKey: ["torrents-delta", instanceId, filters, search, sort, order, deltaRid],
+    queryFn: () =>
+      api.getTorrentDelta(instanceId, {
+        rid: deltaRid,
+        page: currentPage,
+        limit: pageSize,
+        sort,
+        order,
+        search,
+        filters,
+      }),
+    enabled: canUseDeltaPolling,
+    refetchInterval: canUseDeltaPolling ? 3000 : false,
+    refetchIntervalInBackground: true,
+  })
+
+  useEffect(() => {
+    if (!deltaData || !canUseDeltaPolling) {
+      return
+    }
+
+    setDeltaRid(deltaData.rid)
+
+    if (deltaData.fullUpdate) {
+      void refetch()
+      return
+    }
+
+    if (!deltaData.torrents && (!deltaData.removed || deltaData.removed.length === 0)) {
+      return
+    }
+
+    setAllTorrents(prev => {
+      const updated = new Map(prev.map(torrent => [torrent.hash, torrent]))
+
+      if (deltaData.torrents) {
+        Object.entries(deltaData.torrents).forEach(([hash, torrent]) => {
+          updated.set(hash, torrent)
+        })
+      }
+
+      if (deltaData.removed) {
+        deltaData.removed.forEach(hash => {
+          updated.delete(hash)
+        })
+      }
+
+      const next = Array.from(updated.values())
+      next.sort((a, b) => b.added_on - a.added_on)
+      setLastKnownTotal(next.length)
+      return next
+    })
+  }, [canUseDeltaPolling, deltaData, refetch])
 
   const { data: capabilities } = useInstanceCapabilities(instanceId, { enabled })
 

@@ -225,6 +225,82 @@ func (h *TorrentsHandler) ListTorrents(w http.ResponseWriter, r *http.Request) {
 	RespondJSON(w, http.StatusOK, response)
 }
 
+// GetTorrentDelta returns incremental torrent updates for a session.
+func (h *TorrentsHandler) GetTorrentDelta(w http.ResponseWriter, r *http.Request) {
+	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "Invalid instance ID")
+		return
+	}
+
+	sessionID := r.Header.Get("X-Session-ID")
+	if sessionID == "" {
+		RespondError(w, http.StatusBadRequest, "Missing X-Session-ID header")
+		return
+	}
+
+	rid := int64(0)
+	if ridParam := r.URL.Query().Get("rid"); ridParam != "" {
+		parsed, err := strconv.ParseInt(ridParam, 10, 64)
+		if err != nil || parsed < 0 {
+			RespondError(w, http.StatusBadRequest, "Invalid rid")
+			return
+		}
+		rid = parsed
+	}
+
+	limit := 300
+	page := 0
+	sort := "added_on"
+	order := "desc"
+	search := ""
+
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 2000 {
+			limit = parsed
+		}
+	}
+
+	if p := r.URL.Query().Get("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed >= 0 {
+			page = parsed
+		}
+	}
+
+	if s := r.URL.Query().Get("sort"); s != "" {
+		sort = s
+	}
+
+	if o := r.URL.Query().Get("order"); o != "" {
+		order = o
+	}
+
+	if q := r.URL.Query().Get("search"); q != "" {
+		search = q
+	}
+
+	var filters qbittorrent.FilterOptions
+	if f := r.URL.Query().Get("filters"); f != "" {
+		if err := json.Unmarshal([]byte(f), &filters); err != nil {
+			log.Warn().Err(err).Msg("Failed to parse filters for delta request, ignoring")
+		}
+	}
+
+	offset := page * limit
+
+	response, err := h.syncManager.GetTorrentDelta(r.Context(), instanceID, sessionID, rid, limit, offset, sort, order, search, filters)
+	if err != nil {
+		if respondIfInstanceDisabled(w, err, instanceID, "torrents:delta") {
+			return
+		}
+		log.Error().Err(err).Int("instanceID", instanceID).Msg("Failed to get torrent delta")
+		RespondError(w, http.StatusInternalServerError, "Failed to get torrent delta")
+		return
+	}
+
+	RespondJSON(w, http.StatusOK, response)
+}
+
 // CheckDuplicates validates if any of the provided hashes already exist in qBittorrent.
 func (h *TorrentsHandler) CheckDuplicates(w http.ResponseWriter, r *http.Request) {
 	instanceID, err := strconv.Atoi(chi.URLParam(r, "instanceID"))

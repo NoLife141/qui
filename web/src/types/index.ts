@@ -689,6 +689,13 @@ export interface TorrentResponse {
   isCrossInstance?: boolean
 }
 
+export interface TorrentDeltaResponse {
+  rid: number
+  fullUpdate: boolean
+  torrents?: Record<string, Torrent>
+  removed?: string[]
+}
+
 export interface AddTorrentFailedURL {
   url: string
   error: string

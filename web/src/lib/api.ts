@@ -88,6 +88,7 @@ import type {
   TorrentCreationParams,
   TorrentCreationTask,
   TorrentCreationTaskResponse,
+  TorrentDeltaResponse,
   TorrentFile,
   TorrentFilters,
   TorrentProperties,
@@ -143,6 +144,25 @@ const normalizeExcludedIndexerMap = (excluded?: Record<string, string>): Record<
   }
 
   return Object.fromEntries(normalizedEntries) as Record<number, string>
+}
+
+const SESSION_ID_KEY = "qui_session_id"
+
+const getSessionId = (): string | undefined => {
+  if (typeof sessionStorage === "undefined") {
+    return undefined
+  }
+
+  let sessionId = sessionStorage.getItem(SESSION_ID_KEY)
+  if (!sessionId) {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      sessionId = crypto.randomUUID()
+    } else {
+      sessionId = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    }
+    sessionStorage.setItem(SESSION_ID_KEY, sessionId)
+  }
+  return sessionId
 }
 
 // Session storage key used to guard against reload loops when backend is truly down.
@@ -258,10 +278,12 @@ class ApiClient {
     endpoint: string,
     options?: RequestInit
   ): Promise<T> {
+    const sessionId = getSessionId()
     const response = await ssoSafeFetch(`${API_BASE}${endpoint}`, {
       ...options,
       headers: {
         "Content-Type": "application/json",
+        ...(sessionId ? { "X-Session-ID": sessionId } : {}),
         ...options?.headers,
       },
     })
@@ -626,6 +648,32 @@ class ApiClient {
 
     return this.request<TorrentResponse>(
       `/instances/${instanceId}/torrents?${searchParams}`
+    )
+  }
+
+  async getTorrentDelta(
+    instanceId: number,
+    params: {
+      rid: number
+      page?: number
+      limit?: number
+      sort?: string
+      order?: "asc" | "desc"
+      search?: string
+      filters?: TorrentFilters
+    }
+  ): Promise<TorrentDeltaResponse> {
+    const searchParams = new URLSearchParams()
+    searchParams.set("rid", params.rid.toString())
+    if (params.page !== undefined) searchParams.set("page", params.page.toString())
+    if (params.limit !== undefined) searchParams.set("limit", params.limit.toString())
+    if (params.sort) searchParams.set("sort", params.sort)
+    if (params.order) searchParams.set("order", params.order)
+    if (params.search) searchParams.set("search", params.search)
+    if (params.filters) searchParams.set("filters", JSON.stringify(params.filters))
+
+    return this.request<TorrentDeltaResponse>(
+      `/instances/${instanceId}/torrents/delta?${searchParams}`
     )
   }
 

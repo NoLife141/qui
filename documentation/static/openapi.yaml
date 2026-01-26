@@ -1236,6 +1236,64 @@ paths:
         '201':
           description: Torrent added successfully
 
+  /api/instances/{instanceID}/torrents/delta:
+    get:
+      tags:
+        - Torrents
+      summary: List torrent deltas
+      description: Get incremental torrent updates for a session
+      parameters:
+        - $ref: '#/components/parameters/instanceID'
+        - name: X-Session-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: rid
+          in: query
+          schema:
+            type: integer
+            format: int64
+            default: 0
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 500
+            maximum: 2000
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [name, size, progress, priority, added_on]
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: filters
+          in: query
+          schema:
+            type: string
+            description: JSON object with filter criteria (`status`, `categories`, `tags`, `excludeTags`, `trackers`)
+      responses:
+        '200':
+          description: Torrent delta response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TorrentDeltaResponse'
+
 
   /api/instances/{instanceID}/torrents/check-duplicates:
     post:
@@ -4082,6 +4140,23 @@ components:
           type: integer
         savePath:
           type: string
+
+    TorrentDeltaResponse:
+      type: object
+      properties:
+        rid:
+          type: integer
+          format: int64
+        fullUpdate:
+          type: boolean
+        torrents:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Torrent'
+        removed:
+          type: array
+          items:
+            type: string
 
     TorrentProperties:
       type: object
