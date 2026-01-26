@@ -922,17 +922,6 @@ export function Settings({ search, onSearchChange }: SettingsProps) {
             <div className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Instances</CardTitle>
-                  <CardDescription>
-                    Manage your qBittorrent connection settings
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <InstancesManager search={search} onSearchChange={onSearchChange} />
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
                   <CardTitle>Application Preferences</CardTitle>
                   <CardDescription>
                     Control how qui refreshes data across browser tabs
@@ -952,6 +941,17 @@ export function Settings({ search, onSearchChange }: SettingsProps) {
                       onCheckedChange={(value) => setBackgroundRefreshEnabled(!!value)}
                     />
                   </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Instances</CardTitle>
+                  <CardDescription>
+                    Manage your qBittorrent connection settings
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <InstancesManager search={search} onSearchChange={onSearchChange} />
                 </CardContent>
               </Card>
             </div>
