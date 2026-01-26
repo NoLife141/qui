@@ -15,6 +15,7 @@ interface UseTorrentsListOptions {
   filters?: TorrentFilters
   sort?: string
   order?: "asc" | "desc"
+  refetchInBackground?: boolean
 }
 
 // Hook that manages paginated torrent loading with stale-while-revalidate pattern
@@ -23,7 +24,14 @@ export function useTorrentsList(
   instanceId: number,
   options: UseTorrentsListOptions = {}
 ) {
-  const { enabled = true, search, filters, sort = "added_on", order = "desc" } = options
+  const {
+    enabled = true,
+    search,
+    filters,
+    sort = "added_on",
+    order = "desc",
+    refetchInBackground = false,
+  } = options
 
   const [currentPage, setCurrentPage] = useState(0)
   const [allTorrents, setAllTorrents] = useState<Torrent[]>([])
@@ -84,7 +92,7 @@ export function useTorrentsList(
     // Only poll the first page to get fresh data - don't poll pagination pages
     // Reduce polling frequency for cross-instance calls since they're more expensive
     refetchInterval: currentPage === 0 ? (isCrossSeedFiltering ? 10000 : 3000) : false,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: refetchInBackground,
     enabled,
   })
 

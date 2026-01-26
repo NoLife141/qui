@@ -151,7 +151,7 @@ function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceSt
       }),
       enabled: true,
       refetchInterval: 5000, // Match TorrentTable polling
-      refetchIntervalInBackground: true,
+      refetchIntervalInBackground: false,
       staleTime: 2000,
       gcTime: 300000, // Match TorrentTable cache time
       placeholderData: (previousData: TorrentResponse | undefined) => previousData,
