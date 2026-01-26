@@ -754,6 +754,8 @@ export interface ServerState {
   last_external_address_v6?: string
 }
 
+export type ServerStateSpeeds = Pick<ServerState, "dl_info_speed" | "up_info_speed">
+
 export interface TorrentPeer {
   ip: string
   port: number
