@@ -138,18 +138,21 @@ function useGlobalStats(statsData: DashboardInstanceStats[]) {
 }
 
 // Optimized hook to get all instance stats using shared TorrentResponse cache
-function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceStats[] {
+function useAllInstanceStats(
+  instances: InstanceResponse[],
+  options: { enabled: boolean }
+): DashboardInstanceStats[] {
   const dashboardQueries = useQueries({
     queries: instances.map(instance => ({
       // Use same query key pattern as useTorrentsList for first page with no filters
       queryKey: ["torrents-list", instance.id, 0, undefined, undefined, "added_on", "desc"],
       queryFn: () => api.getTorrents(instance.id, {
         page: 0,
-        limit: 1, // Only need metadata, not actual torrents for Dashboard
+        limit: 300,
         sort: "added_on",
         order: "desc" as const,
       }),
-      enabled: true,
+      enabled: options.enabled,
       refetchInterval: 5000, // Match TorrentTable polling
       refetchIntervalInBackground: false,
       staleTime: 2000,
@@ -2370,6 +2373,28 @@ export function Dashboard() {
   const hasInstances = allInstances.length > 0
   const hasActiveInstances = activeInstances.length > 0
   const [isAdvancedMetricsOpen, setIsAdvancedMetricsOpen] = useState(false)
+  const [isHidden, setIsHidden] = useState(() => {
+    if (typeof document === "undefined") {
+      return false
+    }
+    return document.hidden
+  })
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return
+    }
+
+    const handleVisibilityChange = () => {
+      setIsHidden(document.hidden)
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [])
 
   // Dashboard settings
   const { data: dashboardSettings } = useDashboardSettings()
@@ -2377,8 +2402,31 @@ export function Dashboard() {
   const settings = dashboardSettings || DEFAULT_DASHBOARD_SETTINGS
 
   // Use safe hook that always calls the same number of hooks
-  const statsData = useAllInstanceStats(activeInstances)
+  const statsData = useAllInstanceStats(activeInstances, { enabled: !isHidden })
   const globalStats = useGlobalStats(statsData)
+  const transferInfoQueries = useQueries({
+    queries: activeInstances.map(instance => ({
+      queryKey: ["transfer-info", instance.id],
+      queryFn: () => api.getTransferInfo(instance.id),
+      enabled: isHidden,
+      refetchInterval: 3000,
+      refetchIntervalInBackground: true,
+      staleTime: 0,
+    })),
+  })
+  const backgroundSpeeds = transferInfoQueries.reduce(
+    (totals, query) => {
+      const info = query.data
+      if (!info) {
+        return totals
+      }
+      return {
+        dl: totals.dl + (info.dl_info_speed ?? 0),
+        up: totals.up + (info.up_info_speed ?? 0),
+      }
+    },
+    { dl: 0, up: 0 }
+  )
   useTitleBarSpeeds({
     mode: "dashboard",
     foregroundSpeeds: hasActiveInstances
@@ -2387,6 +2435,7 @@ export function Dashboard() {
           up: globalStats.totalUpload ?? 0,
         }
       : undefined,
+    backgroundSpeeds: isHidden && hasActiveInstances ? backgroundSpeeds : undefined,
   })
 
   // Handler for TrackerBreakdownCard to update settings

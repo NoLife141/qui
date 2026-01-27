@@ -13,34 +13,28 @@ interface UseTitleBarSpeedsOptions {
   instanceId?: number
   instanceName?: string
   foregroundSpeeds?: { dl: number; up: number }
+  backgroundSpeeds?: { dl: number; up: number }
 }
 
-export function useServerStateSpeeds(instanceId?: number) {
-  const isEnabled = typeof instanceId === "number"
+export function useServerStateSpeeds(instanceId?: number, enabled = true) {
+  const isEnabled = typeof instanceId === "number" && enabled
 
   const { data } = useQuery({
-    queryKey: ["server-state-speeds", instanceId],
-    queryFn: () => api.getTorrents(instanceId as number, {
-      page: 0,
-      limit: 1,
-      sort: "added_on",
-      order: "desc",
-    }),
+    queryKey: ["transfer-info", instanceId],
+    queryFn: () => api.getTransferInfo(instanceId as number),
     enabled: isEnabled,
     refetchInterval: 3000,
     refetchIntervalInBackground: true,
     staleTime: 0,
   })
 
-  const serverState = data?.serverState
-
-  if (!serverState) {
+  if (!data) {
     return undefined
   }
 
   return {
-    dl: serverState.dl_info_speed ?? 0,
-    up: serverState.up_info_speed ?? 0,
+    dl: data.dl_info_speed ?? 0,
+    up: data.up_info_speed ?? 0,
   }
 }
 
@@ -49,6 +43,7 @@ export function useTitleBarSpeeds({
   instanceId,
   instanceName,
   foregroundSpeeds,
+  backgroundSpeeds: backgroundSpeedsOverride,
 }: UseTitleBarSpeedsOptions) {
   const [speedUnit] = useSpeedUnits()
   const defaultTitleRef = useRef<string | null>(null)
@@ -60,7 +55,12 @@ export function useTitleBarSpeeds({
     return document.hidden
   })
 
-  const backgroundSpeeds = useServerStateSpeeds(instanceId)
+  const shouldPollBackground = isHidden || !foregroundSpeeds
+  const backgroundSpeedsQuery = useServerStateSpeeds(
+    instanceId,
+    shouldPollBackground && !backgroundSpeedsOverride
+  )
+  const backgroundSpeeds = backgroundSpeedsOverride ?? backgroundSpeedsQuery
   const effectiveSpeeds = isHidden ? backgroundSpeeds : foregroundSpeeds
 
   useEffect(() => {
