@@ -138,7 +138,10 @@ function useGlobalStats(statsData: DashboardInstanceStats[]) {
 }
 
 // Optimized hook to get all instance stats using shared TorrentResponse cache
-function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceStats[] {
+function useAllInstanceStats(
+  instances: InstanceResponse[],
+  options: { enabled: boolean }
+): DashboardInstanceStats[] {
   const dashboardQueries = useQueries({
     queries: instances.map(instance => ({
       // Use same query key pattern as useTorrentsList for first page with no filters
@@ -149,7 +152,7 @@ function useAllInstanceStats(instances: InstanceResponse[]): DashboardInstanceSt
         sort: "added_on",
         order: "desc" as const,
       }),
-      enabled: true,
+      enabled: options.enabled,
       refetchInterval: 5000, // Match TorrentTable polling
       refetchIntervalInBackground: true,
       staleTime: 2000,
@@ -2399,7 +2402,7 @@ export function Dashboard() {
   const settings = dashboardSettings || DEFAULT_DASHBOARD_SETTINGS
 
   // Use safe hook that always calls the same number of hooks
-  const statsData = useAllInstanceStats(activeInstances)
+  const statsData = useAllInstanceStats(activeInstances, { enabled: !isHidden })
   const globalStats = useGlobalStats(statsData)
   const transferInfoQueries = useQueries({
     queries: activeInstances.map(instance => ({
