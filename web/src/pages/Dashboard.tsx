@@ -148,7 +148,7 @@ function useAllInstanceStats(
       queryKey: ["torrents-list", instance.id, 0, undefined, undefined, "added_on", "desc"],
       queryFn: () => api.getTorrents(instance.id, {
         page: 0,
-        limit: 300,
+        limit: 1,
         sort: "added_on",
         order: "desc" as const,
       }),
