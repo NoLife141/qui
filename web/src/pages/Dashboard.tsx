@@ -138,17 +138,14 @@ function useGlobalStats(statsData: DashboardInstanceStats[]) {
 }
 
 // Optimized hook to get all instance stats using shared TorrentResponse cache
-function useAllInstanceStats(
-  instances: InstanceResponse[],
-  options: { enabled: boolean }
-): DashboardInstanceStats[] {
+function useAllInstanceStats(instances: InstanceResponse[],options: { enabled: boolean }): DashboardInstanceStats[] {
   const dashboardQueries = useQueries({
     queries: instances.map(instance => ({
       // Use same query key pattern as useTorrentsList for first page with no filters
       queryKey: ["torrents-list", instance.id, 0, undefined, undefined, "added_on", "desc"],
       queryFn: () => api.getTorrents(instance.id, {
         page: 0,
-        limit: 1,
+        limit: 1, // Only need metadata, not actual torrents for Dashboard
         sort: "added_on",
         order: "desc" as const,
       }),
